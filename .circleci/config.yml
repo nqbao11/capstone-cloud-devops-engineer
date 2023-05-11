@@ -1,0 +1,104 @@
+version: 2.1
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.7.3-stretch
+    
+    working_directory: ~/project
+  
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "requirements.txt" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+      - run:
+          name: install dependencies
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            make install
+      - save_cache:
+          paths:
+            - ./venv
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+      - run:
+          name: run lint
+          command: |
+            . venv/bin/activate
+            make lint
+
+  push:
+    docker:
+      - image: circleci/golang:1.15
+    working_directory: ~/project
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+      - run:
+          name: build and upload to docker hub
+          command: |
+            docker build --tag=$IMAGE_NAME .
+            docker login -u="$DOCKERHUB_USERNAME" -p="$DOCKERHUB_PASSWORD"
+            docker tag $IMAGE_NAME $DOCKERHUB_USERNAME/$IMAGE_NAME
+            docker push $DOCKERHUB_USERNAME/$IMAGE_NAME
+
+  create-eks-cluster:
+      docker:
+        - image: python:3.7-alpine3.11
+      working_directory: ~/project
+      steps:
+        - checkout
+        - run:
+            name: install eks and create EKS cluster
+            command: |
+              apk add --update tar gzip curl
+              curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/v0.83.0/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
+              mv /tmp/eksctl /usr/local/bin
+              eksctl create cluster --name cluster-${CIRCLE_WORKFLOW_ID:0:7} --region us-east-1 --nodegroup-name ng-1 --node-type t2.micro --nodes 2
+  deploy-eks-cluster:
+      docker: 
+        - image: circleci/python:3.7.3-stretch
+          user: root
+      working_directory: ~/project
+      steps:
+        - checkout
+        - setup_remote_docker:
+            docker_layer_caching: true
+        - run:
+            name: install kubectl and deploy application to cluster
+            command: |
+              # install some packages
+              sudo apt-get -y install tar gzip unzip curl
+              sudo curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              sudo unzip awscliv2.zip
+              sudo ./aws/install
+              echo "installed awscli"
+              # install kubectl
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+              kubectl version --client
+              echo "installed kubect"
+              # deploy cluster
+              aws eks update-kubeconfig --name cluster-${CIRCLE_WORKFLOW_ID:0:7}
+              docker pull $DOCKERHUB_USERNAME/$IMAGE_NAME
+              echo "pulled docker image and updated k8s config"
+              # deploy application to k8s cluster
+              kubectl apply -f k8s/
+              echo "deployed application to k8s cluster"
+              kubectl wait pods -n default -l run=app-deployment --for condition=Ready --timeout=240s
+              kubectl -n default get all
+              ELB_IP=$(kubectl -n default get service app-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+              echo "$ELB_IP"
+workflows:
+  default:
+    jobs:
+      - build
+      - push:
+          requires: [build]
+      - create-eks-cluster:
+          requires: [push]
+      - deploy-eks-cluster:
+          requires: [create-eks-cluster]
