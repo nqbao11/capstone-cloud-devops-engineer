@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: app-k8s-container
-        image: namnd00/app-k8s:latest
+        image: yesiambao/devopscapston:latest
         ports:
         - name: http
           containerPort: 80
