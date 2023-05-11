@@ -27,7 +27,7 @@ jobs:
           name: run lint
           command: |
             . venv/bin/activate
-            make lint
+            pylint app.py
 
   push:
     docker:
@@ -99,9 +99,9 @@ workflows:
   default:
     jobs:
       - build
-      - push:
-          requires: [build]
-      - create-eks-cluster:
-          requires: [push]
-      - deploy-eks-cluster:
-          requires: [create-eks-cluster]
+      # - push:
+      #     requires: [build]
+      # - create-eks-cluster:
+      #     requires: [push]
+      # - deploy-eks-cluster:
+      #     requires: [create-eks-cluster]
