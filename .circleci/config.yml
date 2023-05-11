@@ -57,7 +57,7 @@ jobs:
               apk add --update tar gzip curl
               curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/v0.83.0/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
               mv /tmp/eksctl /usr/local/bin
-              # eksctl create cluster --name cluster-${CIRCLE_WORKFLOW_ID:0:7} --region us-east-1 --nodegroup-name ng-1 --node-type t2.micro --nodes 2 --version 1.24
+              eksctl create cluster --name cluster-${CIRCLE_WORKFLOW_ID:0:7} --region us-east-1 --nodegroup-name ng-1 --node-type t2.micro --nodes 2 --version 1.24
   deploy-eks-cluster:
       docker: 
         - image: circleci/python:3.7.3-stretch
@@ -76,15 +76,18 @@ jobs:
               sudo unzip awscliv2.zip
               sudo ./aws/install
               echo "installed awscli"
+
               # install kubectl
-              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              curl -LO "https://dl.k8s.io/release/v1.24.12/bin/linux/amd64/kubectl"
               sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
               kubectl version --client
               echo "installed kubect"
+              
               # deploy cluster
               aws eks update-kubeconfig --name cluster-${CIRCLE_WORKFLOW_ID:0:7}
               docker pull $DOCKERHUB_USERNAME/$IMAGE_NAME
               echo "pulled docker image and updated k8s config"
+              
               # deploy application to k8s cluster
               kubectl apply -f k8s/
               echo "deployed application to k8s cluster"
