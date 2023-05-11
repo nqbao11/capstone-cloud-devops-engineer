@@ -20,7 +20,10 @@ ELB link: http://a762e3ef9070540df984cd835a55cf3a-178064731.us-east-1.elb.amazon
 
 ![ELB](./Capture/elb.png)
 
+### 5. Dockerhub
+![Dockerhub](./Capture/dockerhub.png)
+
 ### 5. Lint
 
 ![Lint](./Capture/lint.png)
-
+![LintFailed](./Capture/lintfailed.png)
